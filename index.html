@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guitar Scale Trainer</title>
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    try {
+      const t = (JSON.parse(localStorage.getItem('gst.settings')) || {}).theme;
+      document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    } catch { /* ignore */ }
+  </script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <button id="sbToggle" class="icon" title="Toggle sidebar ([)" aria-label="Toggle sidebar">☰</button>
+      <span class="logo">♪</span> Guitar Scale Trainer
+    </div>
+    <div class="topbar-right">
+      <label class="field inline">Theme
+        <select data-setting="theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="blue">Blue</option>
+          <option value="green">Green</option>
+          <option value="orange">Orange</option>
+          <option value="pink">Pink</option>
+          <option value="noire">Noire</option>
+        </select>
+      </label>
+      <button id="helpBtn" class="icon" title="Help & shortcuts">?</button>
+    </div>
+  </header>
+
+  <div class="layout">
+  <aside id="sidebar" class="sidebar" aria-label="Library">
+    <div class="sb-title">
+      <span class="eyebrow">Library</span>
+      <button id="sbClose" class="icon small" title="Hide sidebar ([)" aria-label="Hide sidebar">«</button>
+    </div>
+    <div class="sb-body"></div>
+  </aside>
+  <div id="sbBackdrop" class="sb-backdrop"></div>
+
+  <main>
+    <section id="routineCard" class="card routine" hidden aria-label="Practice routine"></section>
+    <section class="card now">
+      <div class="now-head">
+        <div>
+          <div class="eyebrow">Now showing</div>
+          <h1 id="nowTitle">C Major</h1>
+          <div id="nowMeta" class="muted">Manual selection</div>
+        </div>
+        <button id="nextBtn" class="primary" title="Next random scale from the last used list (N)">Next random ⟳</button>
+      </div>
+      <div id="scaleNotes" class="chips"></div>
+      <div id="exerciseInfo" class="exercise" hidden></div>
+    </section>
+
+    <section class="card">
+      <div class="controls">
+        <label class="field">Key <select id="key" data-setting="root"></select></label>
+        <label class="field">Scale / chord <select id="type"></select></label>
+        <label id="stringSetField" class="field" hidden>Triad strings <select id="stringSet" data-setting="stringSet"></select></label>
+        <label id="progStyleField" class="field" hidden>Per chord
+          <select data-setting="progStyle">
+            <option value="arp4">Arpeggio up &amp; down</option>
+            <option value="arp3">Arpeggio up</option>
+            <option value="strum">Strum every beat</option>
+            <option value="strum1">Strum once per bar</option>
+          </select>
+        </label>
+        <label id="melodyStyleField" class="field" hidden>Line <select id="melodyStyle" data-setting="melodyStyle"></select></label>
+        <label id="melodyScaleField" class="field" hidden>Scale
+          <select data-setting="melodyScale">
+            <option value="key">Key scale, fitted to each chord</option>
+            <option value="penta">Pentatonic box</option>
+          </select>
+        </label>
+        <label id="melodyBackingField" class="check" hidden title="Strum each chord quietly under the line"><input type="checkbox" data-setting="melodyBacking"> Backing chords</label>
+        <label id="sweepStringsField" class="field" hidden>Sweep across <select id="sweepStrings" data-setting="sweepStrings" data-num></select></label>
+        <label id="sweepQualField" class="field" hidden>Chord qualities
+          <select data-setting="sweepQual">
+            <option value="majmin">Major &amp; minor</option>
+            <option value="all">Major, minor, dim &amp; aug</option>
+            <option value="dimaug">Diminished &amp; augmented</option>
+          </select>
+        </label>
+        <label id="cagedField" class="field" hidden>CAGED view
+          <select data-setting="caged"><optgroup label="Major"><option value="major:chord">Chord shapes</option><option value="major:arp">Arpeggios</option><option value="major:scale">Major scale positions</option><option value="major:penta">Major pentatonic</option><option value="major:combo">Chord → arpeggio → scale</option></optgroup><optgroup label="Minor"><option value="minor:chord">Chord shapes</option><option value="minor:arp">Arpeggios</option><option value="minor:scale">Natural minor positions</option><option value="minor:penta">Minor pentatonic</option><option value="minor:combo">Chord → arpeggio → scale</option></optgroup></select>
+        </label>
+        <label id="chordBarsField" class="field" hidden>Bars per chord
+          <select data-setting="chordBars" data-num><option>1</option><option>2</option><option>4</option></select>
+        </label>
+        <label id="showTabField" class="check" hidden title="Show the progression as guitar tablature under the fretboard"><input type="checkbox" data-setting="showTab"> Show tab</label>
+        <label id="progVoiceField" class="field" hidden>Voicing
+          <select data-setting="progVoice">
+            <option value="lead">Closest (voice leading)</option>
+            <option value="root">Root position only</option>
+            <option value="full">Full chords (open / barre)</option>
+          </select>
+        </label>
+        <label id="diagField" class="field" title="Cross the strings while moving along the neck">Across strings
+          <select data-setting="diag" data-num>
+            <option value="0">Off</option>
+            <option value="1">1 note per string</option>
+            <option value="2">2 notes per string</option>
+            <option value="3">3 notes per string</option>
+            <option value="4">4 notes per string</option>
+          </select>
+        </label>
+        <label id="diagStepField" class="field" hidden title="How far up the neck each new string starts">Shift per string
+          <select data-setting="diagStep" data-num>
+            <option value="1">1 scale step</option>
+            <option value="2">2 scale steps</option>
+          </select>
+        </label>
+        <label id="diagStartField" class="field" hidden title="Where the run begins on the lowest string">Start on
+          <select data-setting="diagStart">
+            <option value="root">Root</option>
+            <option value="low">Lowest scale note</option>
+          </select>
+        </label>
+        <label class="field">Tuning <select id="tuning" data-setting="tuning"></select></label>
+        <label class="field">Frets
+          <select data-setting="frets" data-num>
+            <option>12</option><option>15</option><option>17</option><option>21</option><option>22</option><option>24</option>
+          </select>
+        </label>
+        <label class="field">Labels
+          <select data-setting="labels">
+            <option value="notes">Note names</option>
+            <option value="intervals">Intervals (1 ♭3 5)</option>
+            <option value="roman">Degrees (I ♭III V)</option>
+            <option value="octave">Notes + octave</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <label class="field">Colors
+          <select data-setting="color">
+            <option value="color">By degree</option>
+            <option value="mono">Mono</option>
+          </select>
+        </label>
+        <div class="field">Position
+          <span class="pos">
+            <input type="number" min="0" max="24" data-setting="winFrom" aria-label="From fret">
+            <span>–</span>
+            <input type="number" min="0" max="24" data-setting="winTo" aria-label="To fret">
+            <button id="winAll" class="small" title="Whole neck">All</button>
+          </span>
+        </div>
+        <div class="field">Board
+          <span class="boardpick">
+            <select id="boardPreset" aria-label="Fretboard colour preset"></select>
+            <input id="boardColor" type="color" data-setting="board" aria-label="Custom fretboard colour">
+          </span>
+        </div>
+        <label class="check"><input type="checkbox" data-setting="left"> Left-handed</label>
+        <button id="downloadBtn" class="small push-right" title="Download as PNG">⬇ PNG</button>
+      </div>
+      <div class="board-wrap"><svg id="fretboard" role="img" aria-label="Fretboard diagram"></svg></div>
+      <div id="progBar" class="blockbar" hidden></div>
+      <div id="blockBar" class="blockbar" hidden></div>
+      <div id="tabView" class="tab" hidden></div>
+      <div class="hint">Click any note to hear it · notes outside the position window are dimmed · playback starts on the lowest root inside the window.</div>
+    </section>
+
+    <section id="theoryCard" class="card theory">
+      <div class="theory-head">
+        <button id="theoryToggle" class="icon small" title="Show / hide theory" aria-label="Show or hide theory">▾</button>
+        <h2>Theory</h2>
+        <span id="theoryCtx" class="muted"></span>
+        <button id="theoryBack" class="small push-right" hidden>← Back to current selection</button>
+      </div>
+      <div id="theoryBody" class="theory-body"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card practice">
+        <h2>Metronome &amp; progression</h2>
+        <div class="transport">
+          <button id="playBtn" class="primary big">▶ Play</button>
+          <div class="bpm">
+            <button id="bpmDown" class="icon" aria-label="Slower">−</button>
+            <input id="bpm" type="number" min="30" max="300" data-setting="bpm" aria-label="BPM">
+            <button id="bpmUp" class="icon" aria-label="Faster">+</button>
+            <span class="muted">BPM</span>
+          </div>
+          <button id="tapBtn">Tap</button>
+        </div>
+        <input id="bpmRange" class="wide" type="range" min="30" max="300" data-setting="bpm" aria-label="Tempo">
+        <div class="beat-row"><div id="beatDots" class="beats"></div><span id="countLabel" class="muted"></span></div>
+
+        <div class="seq-head"><span class="eyebrow">Note progression</span><span id="seqInfo" class="muted"></span></div>
+        <div id="seqStrip" class="seq"></div>
+
+        <div class="opts">
+          <fieldset>
+            <legend>Metronome</legend>
+            <label class="check"><input type="checkbox" data-setting="clickOn"> Click</label>
+            <label class="field">Beats / bar
+              <select data-setting="beatsPerBar" data-num>
+                <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+                <option>6</option><option>7</option><option>8</option><option>9</option><option>12</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" data-setting="accent"> Accent beat 1</label>
+            <label class="check"><input type="checkbox" data-setting="subClick"> Click subdivisions</label>
+            <label class="check"><input type="checkbox" data-setting="countIn"> 1-bar count-in</label>
+            <label class="field">Click volume <input type="range" min="0" max="1" step="0.05" data-setting="clickVol"></label>
+          </fieldset>
+          <fieldset>
+            <legend>Scale playback</legend>
+            <label class="check"><input type="checkbox" data-setting="notesOn"> Play notes</label>
+            <label class="field">Notes / beat
+              <select data-setting="notesPerBeat" data-num>
+                <option value="1">1 (quarters)</option>
+                <option value="2">2 (eighths)</option>
+                <option value="3">3 (triplets)</option>
+                <option value="4">4 (sixteenths)</option>
+              </select>
+            </label>
+            <label class="field">Direction
+              <select data-setting="direction">
+                <option value="up">Ascending</option>
+                <option value="down">Descending</option>
+                <option value="updown">Up &amp; down</option>
+                <option value="downup">Down &amp; up</option>
+              </select>
+            </label>
+            <label id="blocksField" class="field">Positions
+              <select data-setting="blocks">
+                <option value="one">One position</option>
+                <option value="all">Every block along the neck</option>
+              </select>
+            </label>
+            <label class="field">Octaves
+              <select data-setting="octaves" data-num><option>1</option><option>2</option><option>3</option></select>
+            </label>
+            <label class="field">Pattern
+              <select data-setting="pattern">
+                <option value="linear">Straight</option>
+                <option value="thirds">In thirds</option>
+                <option value="groups3">Groups of 3</option>
+                <option value="groups4">Groups of 4</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" data-setting="loop"> Loop</label>
+            <label class="check" title="Hide every fretboard note that the progression does not play"><input type="checkbox" data-setting="onlyPlayed"> Show only practised notes</label>
+            <label class="field">Notes volume <input type="range" min="0" max="1" step="0.05" data-setting="noteVol"></label>
+          </fieldset>
+          <fieldset>
+            <legend>Auto-advance</legend>
+            <label class="field">Next random scale
+              <select data-setting="autoMode">
+                <option value="off">Off</option>
+                <option value="bars">Every N bars</option>
+                <option value="pass">After each pass</option>
+              </select>
+            </label>
+            <label class="field">Bars <input id="autoBars" type="number" min="1" max="64" data-setting="autoBars"></label>
+            <p class="muted small-text">Draws from the last random list you used (default: major &amp; minor keys).</p>
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="card machine">
+        <div class="machine-head">
+          <h2>Random scale machine</h2>
+          <div class="timer">
+            <span id="rmTimer">0:00:00</span>
+            <button id="rmTimerToggle" class="small">Start</button>
+            <button id="rmTimerReset" class="small">Reset</button>
+          </div>
+        </div>
+        <p class="muted small-text">Each list is shuffled and every key comes up once before any repeats. Press <kbd>1</kbd>–<kbd>6</kbd> to draw.</p>
+        <div id="randomMachine"></div>
+      </section>
+    </div>
+
+    <section id="bendCard" class="card bend"></section>
+  </main>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <dialog id="helpDlg">
+    <h2>How to use</h2>
+    <ul>
+      <li><b>Sidebar:</b> browse scales, chords, triads and exercises. Folders nest and remember whether they are open; use the filter box to search. Toggle it with ☰ or <kbd>[</kbd>.</li>
+      <li><b>Triads:</b> pick a string set (e.g. strings 2-3-4) to see every closed shape labelled root / 1st / 2nd inversion; playback walks through the shapes up the neck.</li>
+      <li><b>Theory:</b> the Theory panel explains whatever is selected (formula, steps, usage) plus its section. Click ⓘ next to any sidebar folder to read about that section.</li>
+      <li><b>Exercises:</b> presets that set up the pattern, tempo subdivision and auto-advance for you — then press Play.</li>
+      <li><b>Daily routines:</b> pick a time budget (10, 15, 20, 30 minutes or 1 hour) under <i>Daily routines</i>. Each step loads an exercise with a countdown and moves on by itself; <kbd>Space</kbd> pauses the clock and the music together. The key, sequence, string set and line style rotate daily. Minutes, streak and the best tempo for each exercise are logged in this browser.</li>
+      <li><b>Melody over changes:</b> lines that use a scale melodically over a chord progression — chord-tone targets, guide tones, arpeggio → scale, enclosures, motifs and random phrases. Chord tones of the current chord are drawn large; the backing chord is strummed on each change. For random phrases and motifs, press <kbd>N</kbd> for a new one.</li>
+      <li><b>Fretboard:</b> pick key, scale and tuning. Click a note to hear it. Set a <i>Position</i> window (e.g. 5–8) to practise one box.</li>
+      <li><b>Metronome &amp; progression:</b> press Play. The scale is played in time over the chosen octaves, direction and pattern, and every note lights up on the neck.</li>
+      <li><b>Random scale machine:</b> each list deals keys in random order without repeats until it is completed. Build your own list with the custom grid, lock it and press Go; save up to 6 selections.</li>
+      <li><b>Bend trainer:</b> plug the guitar into a line-in or audio interface and press <i>Start listening</i>. Bend the fretted note until the needle sits in the green zone and hold it there; the trace shows how your bend rose, overshot and settled.</li>
+      <li><b>Auto-advance:</b> while playing, jump to the next random scale every N bars or after each full pass.</li>
+    </ul>
+    <h3>Keyboard</h3>
+    <table class="keys">
+      <tr><td><kbd>Space</kbd></td><td>Play / stop</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>6</kbd></td><td>Go on list 1–6</td></tr>
+      <tr><td><kbd>N</kbd></td><td>Next from last used list</td></tr>
+      <tr><td><kbd>+</kbd> / <kbd>-</kbd></td><td>Tempo ±5 BPM</td></tr>
+      <tr><td><kbd>[</kbd></td><td>Show / hide sidebar</td></tr>
+      <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Switch scale position (when playing every block)</td></tr>
+    </table>
+    <div class="dlg-actions"><button id="helpClose" class="primary">Close</button></div>
+  </dialog>
+
+  <script src="js/dom.js"></script>
+  <script src="js/theory.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/fretboard.js"></script>
+  <script src="js/shapes.js"></script>
+  <script src="js/pitch.js"></script>
+  <script src="js/bend.js"></script>
+  <script src="js/random.js"></script>
+  <script src="js/lessons.js"></script>
+  <script src="js/melody.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/routines.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
